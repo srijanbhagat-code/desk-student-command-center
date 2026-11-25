@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UniDesk — Student Command Center</title>
+  <meta name="description" content="UniDesk is a student productivity command center for managing attendance, CGPA, assignments, study sessions, weekly timetables, and academic analytics.">
+  <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/style.css">
+  <script>
+    // Apply saved theme immediately before first paint to prevent theme flicker
+    (function () {
+      try {
+        var raw = localStorage.getItem('unidesk_data_v1');
+        if (raw) {
+          var parsed = JSON.parse(raw);
+          if (parsed && parsed.settings && parsed.settings.theme === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            return;
+          }
+        }
+        var legacyTheme = localStorage.getItem('unidesk_theme');
+        if (legacyTheme === 'dark') {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      } catch (e) {
+        // Ignore storage access errors during pre-hydration
+      }
+    })();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
+  <script src="./js/storage.js" defer></script>
+  <script src="./js/attendance.js" defer></script>
+  <script src="./js/cgpa.js" defer></script>
+  <script src="./js/assignments.js" defer></script>
+  <script src="./js/timer.js" defer></script>
+  <script src="./js/timetable.js" defer></script>
+  <script src="./js/analytics.js" defer></script>
+  <script src="./js/app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Mobile Sidebar Backdrop -->
+    <div class="sidebar-backdrop" id="sidebar-backdrop" aria-hidden="true"></div>
+
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar" id="sidebar" aria-label="Primary Navigation">
+      <div class="sidebar-brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none">
+            <rect width="32" height="32" rx="8" fill="#1E3A8A"/>
+            <path d="M9.5 10V17.5C9.5 21.09 12.41 24 16 24C19.59 24 22.5 21.09 22.5 17.5V10" stroke="#60A5FA" stroke-width="2.75" stroke-linecap="round"/>
+            <circle cx="16" cy="12" r="2.5" fill="#A5B4FC"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">UniDesk</span>
+          <span class="brand-sub">Command Center</span>
+        </div>
+        <button type="button" class="icon-btn sidebar-close-btn" id="sidebar-close-btn" aria-label="Close navigation menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-group-label">Workspace</div>
+        <button type="button" class="nav-item active" data-view="dashboard" aria-current="page">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+          <span>Dashboard</span>
+        </button>
+
+        <button type="button" class="nav-item" data-view="attendance">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          <span>Attendance</span>
+          <span class="nav-badge hidden" id="nav-badge-attendance">0</span>
+        </button>
+
+        <button type="button" class="nav-item" data-view="cgpa">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+          <span>CGPA Calculator</span>
+        </button>
+
+        <button type="button" class="nav-item" data-view="assignments">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></svg>
+          <span>Assignments</span>
+          <span class="nav-badge hidden" id="nav-badge-assignments">0</span>
+        </button>
+
+        <div class="nav-group-label">Focus &amp; Insights</div>
+        <button type="button" class="nav-item" data-view="timer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 1.5M9 2h6"/></svg>
+          <span>Study Timer</span>
+          <span class="nav-pill hidden" id="nav-badge-timer">25:00</span>
+        </button>
+
+        <button type="button" class="nav-item" data-view="timetable">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>
+          <span>Timetable</span>
+        </button>
+
+        <button type="button" class="nav-item" data-view="analytics">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 3v18h18"/><path d="M7 16l4-4 4 4 5-6"/></svg>
+          <span>Analytics</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button type="button" class="sidebar-action-btn" id="open-settings-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>Data &amp; Settings</span>
+        </button>
+        <button type="button" class="sidebar-action-btn" id="sidebar-export-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Export Backup</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Column -->
+    <div class="main-wrapper">
+      <!-- Top Header Bar -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <button type="button" class="icon-btn mobile-menu-btn" id="menu-toggle-btn" aria-label="Open navigation menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+          <div>
+            <h1 class="topbar-title" id="topbar-title">Dashboard</h1>
+            <p class="topbar-subtitle" id="topbar-date">Loading date...</p>
+          </div>
+        </div>
+
+        <div class="topbar-actions">
+          <button type="button" class="btn btn-secondary btn-sm hide-xs" id="topbar-quick-timer-btn" title="Go to Study Timer">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 1.5"/></svg>
+            <span id="topbar-timer-label">Focus</span>
+          </button>
+          <button type="button" class="btn btn-primary btn-sm" id="topbar-new-assignment-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>New Task</span>
+          </button>
+          <button type="button" class="icon-btn" id="topbar-settings-btn" aria-label="Open Data and Settings" title="Data &amp; Settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+          </button>
+          <button type="button" class="icon-btn" id="theme-toggle-btn" aria-label="Toggle dark mode" title="Toggle theme">
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Scrollable Main Workspace -->
+      <main class="main-content" id="main-content">
+
+        <!-- ==================== DASHBOARD VIEW ==================== -->
+        <section class="view active" id="view-dashboard" aria-labelledby="dash-greeting">
+          <div class="alert-banner info hidden" id="demo-banner">
+            <div class="alert-content">
+              <strong>Sample Academic Workspace Loaded</strong>
+              <span>Pre-populated with sample subjects, semesters, and assignments so you can explore immediately. All changes auto-save locally.</span>
+            </div>
+            <div class="alert-actions">
+              <button type="button" class="btn btn-secondary btn-xs" id="demo-clear-btn">Start Fresh</button>
+              <button type="button" class="btn btn-ghost btn-xs" id="demo-dismiss-btn">Dismiss</button>
+            </div>
+          </div>
+
+          <!-- Welcome Header Card -->
+          <div class="welcome-card">
+            <div class="welcome-info">
+              <span class="welcome-eyebrow" id="dash-date-line">Today</span>
+              <h2 class="welcome-title" id="dash-greeting">Welcome back</h2>
+              <p class="welcome-desc" id="dash-summary-line">Everything you need for classes, deadlines, and focus in one place.</p>
+            </div>
+            <div class="welcome-actions">
+              <button type="button" class="btn btn-primary" data-goto="timer">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                <span>Start Focus Session</span>
+              </button>
+              <button type="button" class="btn btn-secondary" data-goto="assignments">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                <span>Review Tasks</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- KPI Statistic Cards -->
+          <div class="kpi-grid">
+            <article class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-label">Total Assignments</span>
+                <span class="kpi-icon blue">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                </span>
+              </div>
+              <div class="kpi-value" id="kpi-total-assignments">0</div>
+              <div class="kpi-meta" id="kpi-total-assignments-meta">0 pending</div>
+            </article>
+
+            <article class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-label">Completed Assignments</span>
+                <span class="kpi-icon emerald">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                </span>
+              </div>
+              <div class="kpi-value" id="kpi-completed-assignments">0</div>
+              <div class="kpi-meta" id="kpi-completed-assignments-meta">0% completion rate</div>
+            </article>
+
+            <article class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-label">Overall Attendance</span>
+                <span class="kpi-icon indigo">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>
+                </span>
+              </div>
+              <div class="kpi-value" id="kpi-overall-attendance">0%</div>
+              <div class="kpi-meta" id="kpi-overall-attendance-meta">Target: 75%</div>
+            </article>
+
+            <article class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-label">Weekly Study Hours</span>
+                <span class="kpi-icon navy">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </span>
+              </div>
+              <div class="kpi-value" id="kpi-weekly-hours">0.0h</div>
+              <div class="kpi-meta" id="kpi-weekly-hours-meta">0 min today</div>
+            </article>
+          </div>
+
+          <!-- Quick Access Tools -->
+          <div class="section-header-row">
+            <h3 class="section-title">Quick-Access Tools</h3>
+            <span class="section-hint">Jump directly to any workspace tool</span>
+          </div>
+          <div class="quick-tools-grid" id="dash-quick-tools">
+            <button type="button" class="quick-tool-card" data-goto="attendance">
+              <span class="quick-tool-icon blue">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              </span>
+              <div class="quick-tool-text">
+                <strong>Attendance Manager</strong>
+                <span id="qt-attendance-sub">Track safe &amp; required classes</span>
+              </div>
+            </button>
+            <button type="button" class="quick-tool-card" data-goto="cgpa">
+              <span class="quick-tool-icon indigo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+              </span>
+              <div class="quick-tool-text">
+                <strong>CGPA Calculator</strong>
+                <span id="qt-cgpa-sub">SGPA &amp; cumulative grades</span>
+              </div>
+            </button>
+            <button type="button" class="quick-tool-card" data-goto="assignments">
+              <span class="quick-tool-icon amber">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></svg>
+              </span>
+              <div class="quick-tool-text">
+                <strong>Assignment Manager</strong>
+                <span id="qt-assignments-sub">Deadlines &amp; priorities</span>
+              </div>
+            </button>
+            <button type="button" class="quick-tool-card" data-goto="timer">
+              <span class="quick-tool-icon purple">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 1.5M9 2h6"/></svg>
+              </span>
+              <div class="quick-tool-text">
+                <strong>Study Timer</strong>
+                <span id="qt-timer-sub">Pomodoro focus &amp; breaks</span>
+              </div>
+            </button>
+            <button type="button" class="quick-tool-card" data-goto="timetable">
+              <span class="quick-tool-icon emerald">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              </span>
+              <div class="quick-tool-text">
+                <strong>Weekly Timetable</strong>
+                <span id="qt-timetable-sub">Mon–Sun class schedule</span>
+              </div>
+            </button>
+            <button type="button" class="quick-tool-card" data-goto="analytics">
+              <span class="quick-tool-icon slate">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16l4-4 4 4 5-6"/></svg>
+              </span>
+              <div class="quick-tool-text">
+                <strong>Productivity Analytics</strong>
+                <span id="qt-analytics-sub">Trends &amp; session logs</span>
+              </div>
+            </button>
+          </div>
+
+          <!-- Dashboard Analytics & Deadlines Grid -->
+          <div class="dashboard-grid">
+            <div class="dashboard-main-col">
+              <!-- Academic Performance Overview -->
+              <div class="card">
+                <div class="card-header">
+                  <div>
+                    <h3 class="card-title">Academic Performance Overview</h3>
+                    <p class="card-subtitle">Subject attendance status and semester SGPA progression</p>
+                  </div>
+                  <div class="pill-badge indigo" id="dash-cgpa-pill">CGPA: 0.00</div>
+                </div>
+                <div class="overview-charts-grid">
+                  <div class="chart-panel">
+                    <div class="chart-panel-title">Subject Attendance (%)</div>
+                    <div class="chart-container">
+                      <canvas id="dash-attendance-chart" aria-label="Subject attendance chart"></canvas>
+                    </div>
+                  </div>
+                  <div class="chart-panel">
+                    <div class="chart-panel-title">Weekly Study &amp; Academic Trend</div>
+                    <div class="chart-container">
+                      <canvas id="dash-performance-chart" aria-label="Academic and study trend chart"></canvas>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="dashboard-side-col">
+              <!-- Upcoming Deadlines -->
+              <div class="card">
+                <div class="card-header">
+                  <div>
+                    <h3 class="card-title">Upcoming Deadlines</h3>
+                    <p class="card-subtitle">Overdue &amp; due soon tasks</p>
+                  </div>
+                  <button type="button" class="btn btn-ghost btn-xs" data-goto="assignments">View All</button>
+                </div>
+                <div class="widget-list" id="dash-deadlines-list"></div>
+              </div>
+
+              <!-- Today's Schedule Snapshot -->
+              <div class="card">
+                <div class="card-header">
+                  <div>
+                    <h3 class="card-title">Today's Classes</h3>
+                    <p class="card-subtitle" id="dash-today-day-label">Schedule</p>
+                  </div>
+                  <button type="button" class="btn btn-ghost btn-xs" data-goto="timetable">Full Week</button>
+                </div>
+                <div class="widget-list" id="dash-today-classes"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== ATTENDANCE VIEW ==================== -->
+        <section class="view" id="view-attendance" aria-label="Attendance Manager">
+          <div class="view-toolbar card">
+            <div class="toolbar-metrics">
+              <div class="inline-metric">
+                <span class="inline-metric-label">Overall Attendance</span>
+                <strong class="inline-metric-val" id="att-overall-pct">0.0%</strong>
+              </div>
+              <div class="divider-v"></div>
+              <div class="inline-metric">
+                <span class="inline-metric-label">Classes Attended</span>
+                <strong class="inline-metric-val" id="att-overall-fraction">0 / 0</strong>
+              </div>
+              <div class="divider-v"></div>
+              <div class="inline-metric">
+                <span class="inline-metric-label">Subjects</span>
+                <strong class="inline-metric-val" id="att-subject-count">0</strong>
+              </div>
+            </div>
+
+            <div class="toolbar-controls">
+              <div class="target-control">
+                <label for="min-attendance-input">Min Required (%)</label>
+                <div class="input-inline-group">
+                  <input type="number" id="min-attendance-input" min="1" max="100" step="1" value="75" class="input-sm">
+                  <button type="button" class="btn btn-secondary btn-sm" id="apply-min-attendance-btn">Apply</button>
+                </div>
+                <span class="field-error" id="min-attendance-error" role="alert"></span>
+              </div>
+              <button type="button" class="btn btn-primary" id="add-subject-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>Add Subject</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="alert-banner danger hidden" id="attendance-warning-banner" role="alert">
+            <div class="alert-content">
+              <strong id="attendance-warning-title">Attendance Warning</strong>
+              <span id="attendance-warning-text"></span>
+            </div>
+          </div>
+
+          <div class="cards-grid" id="attendance-list"></div>
+        </section>
+
+        <!-- ==================== CGPA CALCULATOR VIEW ==================== -->
+        <section class="view" id="view-cgpa" aria-label="CGPA Calculator">
+          <div class="kpi-grid cgpa-kpi-grid">
+            <article class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-label">Cumulative CGPA</span>
+                <span class="kpi-icon indigo">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                </span>
+              </div>
+              <div class="kpi-value" id="cgpa-overall-value">0.00</div>
+              <div class="kpi-meta" id="cgpa-scale-badge">10-Point Scale</div>
+            </article>
+            <article class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-label">Selected Semester SGPA</span>
+                <span class="kpi-icon blue">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg>
+                </span>
+              </div>
+              <div class="kpi-value" id="cgpa-active-sgpa">0.00</div>
+              <div class="kpi-meta" id="cgpa-active-sem-name">No semester selected</div>
+            </article>
+            <article class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-label">Total Credits</span>
+                <span class="kpi-icon emerald">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                </span>
+              </div>
+              <div class="kpi-value" id="cgpa-total-credits">0</div>
+              <div class="kpi-meta" id="cgpa-total-courses">0 subjects across semesters</div>
+            </article>
+            <article class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-label">Semesters Tracked</span>
+                <span class="kpi-icon navy">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                </span>
+              </div>
+              <div class="kpi-value" id="cgpa-semester-count">0</div>
+              <div class="kpi-meta" id="cgpa-highest-sgpa">Best SGPA: 0.00</div>
+            </article>
+          </div>
+
+          <div class="cgpa-actions-bar">
+            <div class="semester-tabs" id="semester-tabs" role="tablist" aria-label="Semesters"></div>
+            <div class="cgpa-bar-buttons">
+              <button type="button" class="btn btn-secondary btn-sm" id="toggle-grade-scale-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+                <span>Grade Point Scale</span>
+              </button>
+              <button type="button" class="btn btn-primary btn-sm" id="add-semester-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>Add Semester</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Editable Grade Scale Drawer Card -->
+          <div class="card hidden" id="grade-scale-panel">
+            <div class="card-header">
+              <div>
+                <h3 class="card-title">University Grade-Point Scale</h3>
+                <p class="card-subtitle">Customize grade labels and point values. All SGPA &amp; CGPA figures recalculate automatically.</p>
+              </div>
+              <div class="btn-group">
+                <button type="button" class="btn btn-secondary btn-xs" id="preset-10-btn">10-Point Preset</button>
+                <button type="button" class="btn btn-secondary btn-xs" id="preset-4-btn">4.0 US Preset</button>
+                <button type="button" class="btn btn-ghost btn-xs" id="close-grade-scale-btn">Close</button>
+              </div>
+            </div>
+            <div class="grade-scale-editor">
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Grade Label</th>
+                      <th>Grade Points</th>
+                      <th class="text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="grade-scale-tbody"></tbody>
+                </table>
+              </div>
+              <form id="add-grade-tier-form" class="inline-add-form" novalidate>
+                <div class="form-field">
+                  <label for="new-grade-label">New Grade</label>
+                  <input type="text" id="new-grade-label" placeholder="e.g., A-" maxlength="8" required>
+                </div>
+                <div class="form-field">
+                  <label for="new-grade-points">Points</label>
+                  <input type="number" id="new-grade-points" placeholder="e.g., 3.7" min="0" max="100" step="0.01" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm">Add Grade Tier</button>
+              </form>
+              <div class="form-error" id="grade-scale-error" role="alert"></div>
+            </div>
+          </div>
+
+          <div class="cgpa-workspace-grid">
+            <!-- Active Semester Editor -->
+            <div class="card" id="semester-editor-card">
+              <div class="card-header">
+                <div class="semester-title-editor">
+                  <input type="text" id="active-semester-name-input" class="semester-name-input" aria-label="Semester name" maxlength="40">
+                  <span class="card-subtitle" id="active-semester-meta">0 subjects &bull; 0 credits</span>
+                </div>
+                <button type="button" class="btn btn-danger-outline btn-xs" id="delete-semester-btn">Delete Semester</button>
+              </div>
+
+              <form id="cgpa-add-course-form" class="inline-add-form cgpa-course-form" novalidate>
+                <div class="form-field grow">
+                  <label for="cgpa-course-name">Subject Name</label>
+                  <input type="text" id="cgpa-course-name" placeholder="e.g., Operating Systems" maxlength="80" required>
+                </div>
+                <div class="form-field w-110">
+                  <label for="cgpa-course-credits">Credits</label>
+                  <input type="number" id="cgpa-course-credits" placeholder="4" min="0.5" max="30" step="0.5" value="4" required>
+                </div>
+                <div class="form-field w-140">
+                  <label for="cgpa-course-grade">Grade</label>
+                  <select id="cgpa-course-grade" required></select>
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm">Add Subject</button>
+              </form>
+              <div class="form-error" id="cgpa-form-error" role="alert"></div>
+
+              <div class="table-responsive" id="cgpa-course-table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Subject</th>
+                      <th>Credits</th>
+                      <th>Grade</th>
+                      <th>Points</th>
+                      <th class="text-right">Remove</th>
+                    </tr>
+                  </thead>
+                  <tbody id="cgpa-course-list"></tbody>
+                </table>
+              </div>
+              <div id="cgpa-semester-empty" class="empty-state hidden"></div>
+            </div>
+
+            <!-- All Semesters Summary -->
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title">All Semesters Breakdown</h3>
+                  <p class="card-subtitle">Click a semester to inspect or edit</p>
+                </div>
+              </div>
+              <div class="widget-list" id="all-semesters-summary"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== ASSIGNMENTS VIEW ==================== -->
+        <section class="view" id="view-assignments" aria-label="Assignment Manager">
+          <div class="stats-strip" id="assignment-stats-strip"></div>
+
+          <div class="alert-banner danger hidden" id="assignments-overdue-banner" role="alert">
+            <div class="alert-content">
+              <strong id="assignments-overdue-title">Overdue Assignments</strong>
+              <span id="assignments-overdue-text"></span>
+            </div>
+            <button type="button" class="btn btn-secondary btn-xs" id="filter-overdue-quick-btn">Show Overdue</button>
+          </div>
+
+          <div class="card filter-toolbar">
+            <div class="filter-pills" id="assignment-status-filters" role="group" aria-label="Filter assignments by status">
+              <button type="button" class="filter-pill active" data-filter="all">All</button>
+              <button type="button" class="filter-pill" data-filter="Pending">Pending</button>
+              <button type="button" class="filter-pill" data-filter="In Progress">In Progress</button>
+              <button type="button" class="filter-pill" data-filter="Completed">Completed</button>
+              <button type="button" class="filter-pill" data-filter="overdue">Overdue</button>
+            </div>
+
+            <div class="filter-controls">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="search" id="assignment-search" placeholder="Search title or subject..." aria-label="Search assignments">
+              </div>
+              <select id="assignment-priority-filter" aria-label="Filter by priority">
+                <option value="all">All Priorities</option>
+                <option value="High">High Priority</option>
+                <option value="Medium">Medium Priority</option>
+                <option value="Low">Low Priority</option>
+              </select>
+              <select id="assignment-sort" aria-label="Sort assignments">
+                <option value="dueDate">Sort: Due Date</option>
+                <option value="priority">Sort: Priority</option>
+                <option value="status">Sort: Status</option>
+              </select>
+              <button type="button" class="btn btn-primary" id="add-assignment-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>Add Assignment</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="assignments-grid" id="assignments-list"></div>
+        </section>
+
+        <!-- ==================== STUDY TIMER VIEW ==================== -->
+        <section class="view" id="view-timer" aria-label="Study Timer">
+          <div class="timer-layout">
+            <!-- Pomodoro Focus Card -->
+            <div class="card timer-main-card">
+              <div class="timer-mode-tabs" id="timer-mode-tabs" role="tablist" aria-label="Timer modes">
+                <button type="button" class="mode-tab active" data-mode="focus">Focus Session</button>
+                <button type="button" class="mode-tab" data-mode="shortBreak">Short Break</button>
+                <button type="button" class="mode-tab" data-mode="longBreak">Long Break</button>
+              </div>
+
+              <div class="timer-ring-wrapper">
+                <svg class="timer-ring" viewBox="0 0 240 240" aria-hidden="true">
+                  <circle class="timer-ring-track" cx="120" cy="120" r="104"/>
+                  <circle class="timer-ring-progress" id="timer-ring-progress" cx="120" cy="120" r="104"/>
+                </svg>
+                <div class="timer-center">
+                  <span class="timer-mode-badge" id="timer-mode-label">Focus</span>
+                  <div class="timer-digits" id="timer-display">25:00</div>
+                  <span class="timer-cycle-text" id="timer-cycle-info">Session 1 of 4</span>
+                </div>
+              </div>
+
+              <div class="timer-topic-box">
+                <label for="timer-topic-input" class="sr-only">Study topic or subject</label>
+                <input type="text" id="timer-topic-input" list="subject-suggestions" placeholder="What are you focusing on? (e.g., Data Structures)">
+              </div>
+
+              <div class="timer-controls">
+                <button type="button" class="btn btn-primary btn-lg" id="timer-start-pause-btn">Start</button>
+                <button type="button" class="btn btn-secondary btn-lg" id="timer-reset-btn">Reset</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="timer-complete-btn" title="Finish current session and log focus time">Complete &amp; Log</button>
+              </div>
+            </div>
+
+            <!-- Right Column: Daily Tracker, Settings, Manual Log -->
+            <div class="timer-side-col">
+              <div class="card">
+                <div class="card-header">
+                  <div>
+                    <h3 class="card-title">Daily Study Tracker</h3>
+                    <p class="card-subtitle">Auto-logged focus minutes &amp; Pomodoro count</p>
+                  </div>
+                </div>
+                <div class="timer-stats-grid">
+                  <div class="mini-stat">
+                    <span class="mini-stat-label">Today's Focus</span>
+                    <strong class="mini-stat-value" id="timer-today-minutes">0 min</strong>
+                  </div>
+                  <div class="mini-stat">
+                    <span class="mini-stat-label">Today's Sessions</span>
+                    <strong class="mini-stat-value" id="timer-today-sessions">0</strong>
+                  </div>
+                  <div class="mini-stat">
+                    <span class="mini-stat-label">Total Sessions</span>
+                    <strong class="mini-stat-value" id="timer-total-sessions">0</strong>
+                  </div>
+                </div>
+                <div class="progress-block">
+                  <div class="progress-label-row">
+                    <span>Weekly Goal Progress</span>
+                    <span id="timer-weekly-goal-text">0.0 / 15 hrs</span>
+                  </div>
+                  <div class="progress-track">
+                    <div class="progress-fill indigo" id="timer-weekly-goal-bar" style="width: 0%"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-header">
+                  <div>
+                    <h3 class="card-title">Timer Durations</h3>
+                    <p class="card-subtitle">Customize focus and break intervals (minutes)</p>
+                  </div>
+                </div>
+                <form id="timer-settings-form" class="duration-form" novalidate>
+                  <div class="duration-inputs">
+                    <div class="form-field">
+                      <label for="setting-focus-min">Focus</label>
+                      <input type="number" id="setting-focus-min" min="1" max="180" value="25" required>
+                    </div>
+                    <div class="form-field">
+                      <label for="setting-short-min">Short Break</label>
+                      <input type="number" id="setting-short-min" min="1" max="60" value="5" required>
+                    </div>
+                    <div class="form-field">
+                      <label for="setting-long-min">Long Break</label>
+                      <input type="number" id="setting-long-min" min="1" max="90" value="15" required>
+                    </div>
+                  </div>
+                  <div class="form-error" id="timer-settings-error" role="alert"></div>
+                  <div class="form-actions-end">
+                    <button type="button" class="btn btn-ghost btn-xs" id="timer-defaults-btn">Reset Defaults</button>
+                    <button type="submit" class="btn btn-secondary btn-sm">Save Durations</button>
+                  </div>
+                </form>
+              </div>
+
+              <div class="card">
+                <div class="card-header">
+                  <div>
+                    <h3 class="card-title">Today's Study Log</h3>
+                    <p class="card-subtitle">Completed sessions &amp; manual entries</p>
+                  </div>
+                </div>
+                <form id="manual-session-form" class="inline-add-form compact" novalidate>
+                  <div class="form-field grow">
+                    <label for="manual-session-topic" class="sr-only">Topic</label>
+                    <input type="text" id="manual-session-topic" list="subject-suggestions" placeholder="Add offline study session..." maxlength="80" required>
+                  </div>
+                  <div class="form-field w-90">
+                    <label for="manual-session-mins" class="sr-only">Minutes</label>
+                    <input type="number" id="manual-session-mins" min="1" max="480" value="30" required>
+                  </div>
+                  <button type="submit" class="btn btn-secondary btn-sm">Log Min</button>
+                </form>
+                <div class="form-error" id="manual-session-error" role="alert"></div>
+                <div class="widget-list compact-list" id="timer-today-log"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== WEEKLY TIMETABLE VIEW ==================== -->
+        <section class="view" id="view-timetable" aria-label="Weekly Timetable">
+          <div class="card filter-toolbar">
+            <div class="filter-pills" id="timetable-day-filters" role="group" aria-label="Filter timetable by day">
+              <button type="button" class="filter-pill active" data-day="All">All Week</button>
+              <button type="button" class="filter-pill" data-day="Monday">Mon</button>
+              <button type="button" class="filter-pill" data-day="Tuesday">Tue</button>
+              <button type="button" class="filter-pill" data-day="Wednesday">Wed</button>
+              <button type="button" class="filter-pill" data-day="Thursday">Thu</button>
+              <button type="button" class="filter-pill" data-day="Friday">Fri</button>
+              <button type="button" class="filter-pill" data-day="Saturday">Sat</button>
+              <button type="button" class="filter-pill" data-day="Sunday">Sun</button>
+            </div>
+            <button type="button" class="btn btn-primary" id="add-timetable-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>Add Class</span>
+            </button>
+          </div>
+
+          <div class="alert-banner warning hidden" id="timetable-conflict-banner" role="alert">
+            <div class="alert-content">
+              <strong>Schedule Overlap Detected</strong>
+              <span id="timetable-conflict-text"></span>
+            </div>
+          </div>
+
+          <div id="timetable-board"></div>
+        </section>
+
+        <!-- ==================== ANALYTICS VIEW ==================== -->
+        <section class="view" id="view-analytics" aria-label="Productivity Analytics">
+          <div class="kpi-grid" id="analytics-kpis"></div>
+
+          <div class="analytics-grid">
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title">Weekly Study Hours</h3>
+                  <p class="card-subtitle">Daily focus hours over the current week (Mon–Sun)</p>
+                </div>
+                <span class="pill-badge blue" id="analytics-week-total-pill">0.0 hrs</span>
+              </div>
+              <div class="chart-container">
+                <canvas id="analytics-study-chart" aria-label="Weekly study hours chart"></canvas>
+              </div>
+              <div class="progress-block mt-16" id="analytics-study-goal-wrap"></div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title">Attendance Statistics</h3>
+                  <p class="card-subtitle">Subject-wise percentage vs required minimum</p>
+                </div>
+                <span class="pill-badge emerald" id="analytics-att-pill">0%</span>
+              </div>
+              <div class="chart-container">
+                <canvas id="analytics-attendance-chart" aria-label="Attendance statistics chart"></canvas>
+              </div>
+              <div class="bars-list mt-16" id="analytics-attendance-bars"></div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title">Academic Performance (SGPA)</h3>
+                  <p class="card-subtitle">Semester SGPA trend &amp; cumulative CGPA</p>
+                </div>
+                <span class="pill-badge indigo" id="analytics-cgpa-pill">CGPA: 0.00</span>
+              </div>
+              <div class="chart-container">
+                <canvas id="analytics-sgpa-chart" aria-label="Semester SGPA trend chart"></canvas>
+              </div>
+              <div class="bars-list mt-16" id="analytics-semester-bars"></div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title">Assignment Completion</h3>
+                  <p class="card-subtitle">Status breakdown &amp; completion rate</p>
+                </div>
+                <span class="pill-badge slate" id="analytics-assign-pill">0 / 0</span>
+              </div>
+              <div class="chart-container">
+                <canvas id="analytics-assignments-chart" aria-label="Assignment breakdown chart"></canvas>
+              </div>
+              <div class="bars-list mt-16" id="analytics-assignment-bars"></div>
+            </div>
+          </div>
+
+          <div class="card mt-20">
+            <div class="card-header">
+              <div>
+                <h3 class="card-title">Study Session History</h3>
+                <p class="card-subtitle">Complete log of completed Pomodoro blocks and manual study sessions</p>
+              </div>
+              <span class="section-hint" id="analytics-history-count">0 sessions logged</span>
+            </div>
+            <div id="analytics-session-history"></div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- Shared Subject Autocomplete Datalist -->
+  <datalist id="subject-suggestions"></datalist>
+
+  <!-- ==================== MODALS ==================== -->
+
+  <!-- Attendance Subject Modal -->
+  <div class="modal-backdrop hidden" id="subject-modal" role="dialog" aria-modal="true" aria-labelledby="subject-modal-title">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title" id="subject-modal-title">Add Subject</h3>
+        <button type="button" class="icon-btn modal-close" data-close-modal="subject-modal" aria-label="Close modal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <form id="subject-form" class="modal-body" novalidate>
+        <input type="hidden" id="subject-id">
+        <div class="form-field">
+          <label for="subject-name">Subject Name <span class="req">*</span></label>
+          <input type="text" id="subject-name" placeholder="e.g., Data Structures &amp; Algorithms" maxlength="80" required>
+        </div>
+        <div class="form-field">
+          <label for="subject-code">Course Code (optional)</label>
+          <input type="text" id="subject-code" placeholder="e.g., CS201" maxlength="20">
+        </div>
+        <div class="form-row-2">
+          <div class="form-field">
+            <label for="subject-attended">Attended Classes <span class="req">*</span></label>
+            <input type="number" id="subject-attended" min="0" step="1" placeholder="e.g., 18" required>
+          </div>
+          <div class="form-field">
+            <label for="subject-total">Total Classes <span class="req">*</span></label>
+            <input type="number" id="subject-total" min="0" step="1" placeholder="e.g., 22" required>
+          </div>
+        </div>
+        <div class="form-error" id="subject-form-error" role="alert"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close-modal="subject-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="subject-save-btn">Save Subject</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Assignment Modal -->
+  <div class="modal-backdrop hidden" id="assignment-modal" role="dialog" aria-modal="true" aria-labelledby="assignment-modal-title">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title" id="assignment-modal-title">New Assignment</h3>
+        <button type="button" class="icon-btn modal-close" data-close-modal="assignment-modal" aria-label="Close modal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <form id="assignment-form" class="modal-body" novalidate>
+        <input type="hidden" id="assignment-id">
+        <div class="form-field">
+          <label for="assignment-title">Assignment Title <span class="req">*</span></label>
+          <input type="text" id="assignment-title" placeholder="e.g., Binary Tree Lab Report" maxlength="120" required>
+        </div>
+        <div class="form-row-2">
+          <div class="form-field">
+            <label for="assignment-subject">Subject <span class="req">*</span></label>
+            <input type="text" id="assignment-subject" list="subject-suggestions" placeholder="e.g., Data Structures" maxlength="80" required>
+          </div>
+          <div class="form-field">
+            <label for="assignment-due-date">Due Date <span class="req">*</span></label>
+            <input type="date" id="assignment-due-date" required>
+          </div>
+        </div>
+        <div class="form-row-2">
+          <div class="form-field">
+            <label for="assignment-priority">Priority</label>
+            <select id="assignment-priority">
+              <option value="Low">Low</option>
+              <option value="Medium" selected>Medium</option>
+              <option value="High">High</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="assignment-status">Status</label>
+            <select id="assignment-status">
+              <option value="Pending" selected>Pending</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Completed">Completed</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-field">
+          <label for="assignment-description">Description</label>
+          <textarea id="assignment-description" rows="3" placeholder="Notes, submission format, rubric reminders..." maxlength="500"></textarea>
+        </div>
+        <div class="form-error" id="assignment-form-error" role="alert"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close-modal="assignment-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="assignment-save-btn">Save Assignment</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Timetable Entry Modal -->
+  <div class="modal-backdrop hidden" id="timetable-modal" role="dialog" aria-modal="true" aria-labelledby="timetable-modal-title">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title" id="timetable-modal-title">Add Class</h3>
+        <button type="button" class="icon-btn modal-close" data-close-modal="timetable-modal" aria-label="Close modal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <form id="timetable-form" class="modal-body" novalidate>
+        <input type="hidden" id="timetable-id">
+        <div class="form-row-2">
+          <div class="form-field">
+            <label for="timetable-day">Day <span class="req">*</span></label>
+            <select id="timetable-day" required>
+              <option value="Monday">Monday</option>
+              <option value="Tuesday">Tuesday</option>
+              <option value="Wednesday">Wednesday</option>
+              <option value="Thursday">Thursday</option>
+              <option value="Friday">Friday</option>
+              <option value="Saturday">Saturday</option>
+              <option value="Sunday">Sunday</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="timetable-color">Accent Color</label>
+            <select id="timetable-color">
+              <option value="blue">Blue</option>
+              <option value="indigo">Purple / Indigo</option>
+              <option value="navy">Navy</option>
+              <option value="emerald">Teal / Green</option>
+              <option value="amber">Amber</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-field">
+          <label for="timetable-subject">Subject Name <span class="req">*</span></label>
+          <input type="text" id="timetable-subject" list="subject-suggestions" placeholder="e.g., Computer Networks" maxlength="80" required>
+        </div>
+        <div class="form-field">
+          <label for="timetable-classroom">Classroom / Location <span class="req">*</span></label>
+          <input type="text" id="timetable-classroom" placeholder="e.g., Room 302, Engineering Block" maxlength="60" required>
+        </div>
+        <div class="form-row-2">
+          <div class="form-field">
+            <label for="timetable-start">Start Time <span class="req">*</span></label>
+            <input type="time" id="timetable-start" required>
+          </div>
+          <div class="form-field">
+            <label for="timetable-end">End Time <span class="req">*</span></label>
+            <input type="time" id="timetable-end" required>
+          </div>
+        </div>
+        <div class="form-error" id="timetable-form-error" role="alert"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close-modal="timetable-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="timetable-save-btn">Save Class</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Data & Preferences Modal -->
+  <div class="modal-backdrop hidden" id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header">
+        <h3 class="modal-title" id="settings-modal-title">Workspace Preferences &amp; Data</h3>
+        <button type="button" class="icon-btn modal-close" data-close-modal="settings-modal" aria-label="Close modal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="preferences-form" class="prefs-section" novalidate>
+          <h4 class="modal-subtitle">Profile &amp; Goals</h4>
+          <div class="form-row-2">
+            <div class="form-field">
+              <label for="pref-student-name">Student Name</label>
+              <input type="text" id="pref-student-name" placeholder="e.g., Alex Morgan" maxlength="50">
+            </div>
+            <div class="form-field">
+              <label for="pref-weekly-goal">Weekly Study Goal (hours)</label>
+              <input type="number" id="pref-weekly-goal" min="1" max="100" step="0.5" value="15" required>
+            </div>
+          </div>
+          <div class="form-error" id="prefs-form-error" role="alert"></div>
+          <div class="form-actions-end">
+            <button type="submit" class="btn btn-primary btn-sm">Save Preferences</button>
+          </div>
+        </form>
+
+        <div class="divider-h"></div>
+
+        <div class="prefs-section">
+          <h4 class="modal-subtitle">Appearance</h4>
+          <div class="theme-switch-row">
+            <span>Select workspace color theme (persisted automatically)</span>
+            <div class="btn-group">
+              <button type="button" class="btn btn-secondary btn-sm" id="pref-theme-light">Light</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="pref-theme-dark">Dark</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="divider-h"></div>
+
+        <div class="prefs-section">
+          <h4 class="modal-subtitle">Data Backup &amp; Portability</h4>
+          <p class="muted-text">All records are saved locally in your browser. Export a JSON backup to transfer or safeguard your data.</p>
+          <div class="data-actions-grid">
+            <button type="button" class="btn btn-secondary" id="export-json-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>Export JSON</span>
+            </button>
+            <label class="btn btn-secondary file-upload-btn" for="import-json-input">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span>Import JSON</span>
+              <input type="file" id="import-json-input" accept=".json,application/json" hidden>
+            </label>
+            <button type="button" class="btn btn-secondary" id="load-sample-btn">Load Sample Data</button>
+            <button type="button" class="btn btn-danger-outline" id="clear-all-btn">Clear All Data</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reusable Confirmation Modal -->
+  <div class="modal-backdrop hidden" id="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="confirm-modal-title" aria-describedby="confirm-modal-message">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-header">
+        <h3 class="modal-title" id="confirm-modal-title">Confirm Action</h3>
+        <button type="button" class="icon-btn modal-close" data-close-modal="confirm-modal" aria-label="Close confirmation">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p id="confirm-modal-message" class="confirm-text"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="confirm-cancel-btn">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirm-ok-btn">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>
